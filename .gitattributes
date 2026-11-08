@@ -1,0 +1,2 @@
+# .bat 파일은 Windows 줄바꿈(CRLF)으로 내려받기
+*.bat text eol=crlf
