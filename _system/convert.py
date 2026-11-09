@@ -1,9 +1,11 @@
 import os, shutil, subprocess, zipfile
+from urllib.parse import quote
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PAPERS, OUTPUT = ROOT / "papers", ROOT / "output"
 RAW, WORK = OUTPUT / "_raw", OUTPUT / "_work"
+MD, IMG = OUTPUT / "md", OUTPUT / "images"
 
 # 환경 설정: 프로젝트 폴더 안 모델만 사용, 사용 통계 전송 끄기
 env = dict(os.environ,
@@ -20,7 +22,7 @@ def name_of(pdf):  # Windows 경로 길이 제한(260자) 때문에 80자로 자
 
 # 이미 변환된 논문은 건너뜀
 pdfs = sorted(PAPERS.glob("*.pdf"))
-todo = [p for p in pdfs if not (OUTPUT / name_of(p) / f"{name_of(p)}.md").exists()]
+todo = [p for p in pdfs if not (MD / f"{name_of(p)}.md").exists()]
 print(f"PDF {len(pdfs)}개 중 새로 변환 {len(todo)}개 / tier: {tier}")
 
 if todo:
@@ -39,14 +41,17 @@ if todo:
         if not z.exists():
             print(f"[실패] {p.name}")
             continue
-        dest = OUTPUT / name
-        (dest / "images").mkdir(parents=True, exist_ok=True)
+        MD.mkdir(parents=True, exist_ok=True)
+        (IMG / name).mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(z) as zf:
             for entry in zf.namelist():
                 if entry == "markdown.md":
-                    (dest / f"{name}.md").write_bytes(zf.read(entry))
+                    # 그림 링크를 images/x.jpg → ../images/논문이름/x.jpg 로 변경
+                    md = zf.read(entry).decode("utf-8")
+                    md = md.replace("](images/", f"](../images/{quote(name)}/")
+                    (MD / f"{name}.md").write_bytes(md.encode("utf-8"))
                 elif entry.startswith("images/") and not entry.endswith("/"):
-                    (dest / "images" / Path(entry).name).write_bytes(zf.read(entry))
+                    (IMG / name / Path(entry).name).write_bytes(zf.read(entry))
         os.replace(z, RAW / f"{name}.zip")
         print(f"[완료] {name}")
     shutil.rmtree(WORK, ignore_errors=True)
